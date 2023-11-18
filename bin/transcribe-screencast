@@ -1,0 +1,31 @@
+#!/bin/sh
+DIR="$(mktemp -d)"
+ln -sfn "$DIR" "/tmp/last-transcript"
+NAME="screencast.mp4"
+ffmpeg -y \
+    -f x11grab \
+    -framerate 60 \
+    -s "$(xdpyinfo | grep dimensions | awk '{print $2;}')" \
+    -i "$DISPLAY" \
+    -f pulse -i "$(pactl get-default-sink).monitor" \
+    -r 30 \
+    -c:v h264 -crf 0 -preset ultrafast -c:a aac \
+    "$DIR/$NAME" &
+PID=$!
+
+function stop_recording()
+{
+    trap - INT
+    echo q > /proc/$PID/fd/0
+    wait
+    source $HOME/venv/bin/activate
+    whisper-ctranslate2 \
+        --model large-v2 \
+        --language de \
+        --output_dir "$DIR" \
+        "$DIR/$NAME"
+    exit 0
+}
+
+trap stop_recording INT
+wait
